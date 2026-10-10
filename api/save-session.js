@@ -23,6 +23,7 @@ module.exports = async function handler(req, res) {
     await connectDB();
 
     const {
+      sessionId,
       ip,
       ipType,
       latitude,
@@ -32,6 +33,7 @@ module.exports = async function handler(req, res) {
       mapsUrl,
       ipLatitude,
       ipLongitude,
+      address,
       country,
       city,
       isp,
@@ -53,7 +55,7 @@ module.exports = async function handler(req, res) {
     const lng = longitude != null && !isNaN(Number(longitude)) ? Number(longitude) : null;
     const computedMapsUrl = mapsUrl || (lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 
-    const newSession = new Session({
+    const dataToSave = {
       ip,
       ipType,
       latitude: lat,
@@ -63,6 +65,7 @@ module.exports = async function handler(req, res) {
       mapsUrl: computedMapsUrl,
       ipLatitude: ipLatitude != null && !isNaN(Number(ipLatitude)) ? Number(ipLatitude) : null,
       ipLongitude: ipLongitude != null && !isNaN(Number(ipLongitude)) ? Number(ipLongitude) : null,
+      address: address || null,
       country,
       city,
       isp,
@@ -74,16 +77,29 @@ module.exports = async function handler(req, res) {
       language,
       userAgent,
       sessionTime
-    });
+    };
 
-    const savedDoc = await newSession.save();
-    console.log(`[SAVED] Session for IP: ${ip} | Location: (${lat}, ${lng}) (ID: ${savedDoc._id})`);
+    let savedDoc;
+    let isUpdate = false;
 
-    return res.status(201).json({
+    if (sessionId) {
+      savedDoc = await Session.findByIdAndUpdate(sessionId, dataToSave, { new: true });
+      if (savedDoc) isUpdate = true;
+    }
+
+    if (!savedDoc) {
+      const newSession = new Session(dataToSave);
+      savedDoc = await newSession.save();
+    }
+
+    console.log(`[${isUpdate ? 'UPDATED' : 'SAVED'}] Session for IP: ${ip} | Location: (${lat}, ${lng}) [Source: ${locationSource}] (ID: ${savedDoc._id})`);
+
+    return res.status(200).json({
       success: true,
-      message: 'Session data successfully saved to MongoDB',
+      message: isUpdate ? 'Session updated in MongoDB' : 'Session saved to MongoDB',
       id: savedDoc._id,
-      savedAt: savedDoc.savedAt
+      savedAt: savedDoc.savedAt,
+      isUpdate
     });
   } catch (error) {
     console.error('Error saving session:', error);

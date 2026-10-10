@@ -444,6 +444,49 @@ body {
   100% { background-position: 0 50%; }
 }
 
+/* Location Banner */
+.location-banner {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.location-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.location-pulse-dot {
+  font-size: 1.5rem;
+  display: inline-block;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.banner-title {
+  color: #ffffff;
+  font-size: 0.95rem;
+  display: block;
+}
+
+.banner-desc {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Error Banner */
 .error-banner {
   background: rgba(248, 113, 113, 0.1);

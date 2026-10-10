@@ -10,6 +10,7 @@ const sessionSchema = new mongoose.Schema({
   mapsUrl: { type: String },
   ipLatitude: { type: Number },
   ipLongitude: { type: Number },
+  address: { type: String },
   country: { type: String },
   city: { type: String },
   isp: { type: String },

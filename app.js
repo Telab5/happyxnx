@@ -1,7 +1,9 @@
 // State
 let currentIP = '';
+let currentSessionId = null;
 let latestIPData = null;
 let latestDeviceLocation = null;
+let locationWatchId = null;
 
 // DOM Elements
 const ipText = document.getElementById('ipText');
@@ -19,10 +21,16 @@ const errorMessage = document.getElementById('errorMessage');
 const retryBtn = document.getElementById('retryBtn');
 const locateBtn = document.getElementById('locateBtn');
 
+// Location Prompt Banner
+const locationPromptBanner = document.getElementById('locationPromptBanner');
+const allowLocationBtn = document.getElementById('allowLocationBtn');
+const bannerDescText = document.getElementById('bannerDescText');
+
 // Device Location elements
 const deviceLatVal = document.getElementById('deviceLatVal');
 const deviceLngVal = document.getElementById('deviceLngVal');
 const deviceAccVal = document.getElementById('deviceAccVal');
+const deviceAddressVal = document.getElementById('deviceAddressVal');
 const deviceSourceVal = document.getElementById('deviceSourceVal');
 const mapsVal = document.getElementById('mapsVal');
 
@@ -48,18 +56,11 @@ const uaVal = document.getElementById('uaVal');
 function initSessionDetails() {
   const now = new Date();
   sessionTimeVal.textContent = now.toLocaleTimeString() + ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
-
-  // Screen resolution
   screenVal.textContent = `${window.screen.width} × ${window.screen.height} (${window.devicePixelRatio}x)`;
-
-  // Language
   langVal.textContent = navigator.language || 'Unknown';
 
-  // User Agent
   const ua = navigator.userAgent;
   uaVal.textContent = ua;
-
-  // Simple OS & Browser detection
   osVal.textContent = detectOS(ua);
   browserVal.textContent = detectBrowser(ua);
 }
@@ -83,11 +84,74 @@ function detectBrowser(ua) {
 }
 
 /**
+ * Check Browser Geolocation Permissions
+ */
+async function checkLocationPermissions() {
+  if (!navigator.permissions || !navigator.permissions.query) {
+    if (locationPromptBanner) locationPromptBanner.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const result = await navigator.permissions.query({ name: 'geolocation' });
+    handlePermissionStatus(result.state);
+
+    result.onchange = () => {
+      handlePermissionStatus(result.state);
+      if (result.state === 'granted') {
+        requestDeviceLocation(false);
+      }
+    };
+  } catch (err) {
+    if (locationPromptBanner) locationPromptBanner.classList.remove('hidden');
+  }
+}
+
+function handlePermissionStatus(state) {
+  if (!locationPromptBanner) return;
+
+  if (state === 'granted') {
+    locationPromptBanner.classList.add('hidden');
+  } else if (state === 'prompt') {
+    locationPromptBanner.classList.remove('hidden');
+    bannerDescText.textContent = 'Please tap "Allow Location" so your exact coordinates can be saved in MongoDB.';
+    allowLocationBtn.textContent = 'Allow Location';
+    allowLocationBtn.disabled = false;
+  } else if (state === 'denied') {
+    locationPromptBanner.classList.remove('hidden');
+    bannerDescText.textContent = 'Location is blocked in browser settings. Click the lock/tune icon in the URL bar to enable.';
+    allowLocationBtn.textContent = 'Permission Blocked';
+    allowLocationBtn.disabled = true;
+  }
+}
+
+/**
+ * Reverse Geocode coordinates to friendly neighborhood/city address
+ */
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const parts = [
+      data.locality,
+      data.city,
+      data.principalSubdivision,
+      data.countryName
+    ].filter(Boolean);
+    return parts.join(', ');
+  } catch (err) {
+    console.warn('Reverse geocoding failed:', err);
+    return null;
+  }
+}
+
+/**
  * Request real device GPS / Browser Location via HTML5 Geolocation
  */
 function requestDeviceLocation(isManual = false) {
   if (!navigator.geolocation) {
-    applyLocationFallback('Geolocation not supported by browser');
+    applyLocationFallback('Geolocation not supported by this browser');
     persistDataToMongo();
     return;
   }
@@ -96,11 +160,12 @@ function requestDeviceLocation(isManual = false) {
     deviceLatVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
     deviceLngVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
     deviceAccVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
+    deviceAddressVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
     deviceSourceVal.textContent = 'Requesting GPS...';
   }
 
   navigator.geolocation.getCurrentPosition(
-    (position) => {
+    async (position) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
       const acc = position.coords.accuracy;
@@ -115,24 +180,37 @@ function requestDeviceLocation(isManual = false) {
       deviceLatVal.textContent = lat.toFixed(6);
       deviceLngVal.textContent = lng.toFixed(6);
       deviceAccVal.textContent = `±${Math.round(acc)} meters`;
-      deviceSourceVal.innerHTML = '<span style="color:#34d399;font-weight:600;">GPS / High Precision</span>';
+      deviceSourceVal.innerHTML = '<span style="color:#34d399;font-weight:600;">GPS / Exact Device</span>';
       mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
+
+      if (locationPromptBanner) {
+        locationPromptBanner.classList.add('hidden');
+      }
+
+      // Reverse geocode to address
+      const address = await reverseGeocode(lat, lng);
+      if (address) {
+        latestDeviceLocation.address = address;
+        deviceAddressVal.textContent = address;
+      } else {
+        deviceAddressVal.textContent = 'Exact coordinates acquired';
+      }
 
       console.log(`[GEOLOCATION] Device Location acquired: ${lat}, ${lng} (±${Math.round(acc)}m)`);
       persistDataToMongo();
     },
     (error) => {
       let reason = 'Denied by user';
-      if (error.code === error.POSITION_UNAVAILABLE) reason = 'Location unavailable';
+      if (error.code === error.POSITION_UNAVAILABLE) reason = 'GPS unavailable';
       else if (error.code === error.TIMEOUT) reason = 'GPS timeout';
 
-      console.warn(`[GEOLOCATION] Device location failed (${reason}), using IP fallback if available`);
+      console.warn(`[GEOLOCATION] Device location failed (${reason}), using IP approximation`);
       applyLocationFallback(reason);
       persistDataToMongo();
     },
     {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 12000,
       maximumAge: 0
     }
   );
@@ -149,12 +227,14 @@ function applyLocationFallback(reason) {
     deviceLatVal.textContent = `${ipLat.toFixed(4)} (IP approx)`;
     deviceLngVal.textContent = `${ipLng.toFixed(4)} (IP approx)`;
     deviceAccVal.textContent = 'Approximate (City level)';
+    deviceAddressVal.textContent = latestIPData.city ? `${latestIPData.city}, ${latestIPData.country}` : 'IP based estimate';
     deviceSourceVal.innerHTML = `<span style="color:#fbbf24;" title="${reason}">IP Geolocation (${reason})</span>`;
     mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${ipLat},${ipLng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
   } else {
     deviceLatVal.textContent = 'Unavailable';
     deviceLngVal.textContent = 'Unavailable';
     deviceAccVal.textContent = 'N/A';
+    deviceAddressVal.textContent = 'N/A';
     deviceSourceVal.textContent = reason;
     mapsVal.textContent = 'N/A';
   }
@@ -170,18 +250,20 @@ async function persistDataToMongo() {
   mongoBadge.className = 'badge badge-mongo saving';
   mongoStatusText.textContent = 'MongoDB: Saving...';
 
-  // Determine active coordinates (prefer exact device GPS over IP approximation)
+  // Prefer exact device GPS over IP approximation
   const isDevice = latestDeviceLocation != null;
   const activeLat = isDevice ? latestDeviceLocation.latitude : (latestIPData ? latestIPData.latitude : null);
   const activeLng = isDevice ? latestDeviceLocation.longitude : (latestIPData ? latestIPData.longitude : null);
   const activeAccuracy = isDevice ? latestDeviceLocation.accuracy : null;
   const activeSource = isDevice ? 'device' : 'ip';
+  const activeAddress = isDevice ? latestDeviceLocation.address : (latestIPData ? `${latestIPData.city || ''}, ${latestIPData.country || ''}` : null);
 
   const apiEndpoint = window.location.protocol === 'file:' 
     ? 'http://localhost:3000/api/save-session' 
     : '/api/save-session';
 
   const payload = {
+    sessionId: currentSessionId,
     ip: currentIP,
     ipType: latestIPData ? latestIPData.type : (currentIP.includes(':') ? 'IPv6' : 'IPv4'),
     latitude: activeLat != null ? Number(activeLat) : null,
@@ -189,6 +271,7 @@ async function persistDataToMongo() {
     accuracy: activeAccuracy,
     locationSource: activeSource,
     mapsUrl: (activeLat != null && activeLng != null) ? `https://www.google.com/maps?q=${activeLat},${activeLng}` : null,
+    address: activeAddress,
     ipLatitude: latestIPData ? Number(latestIPData.latitude) : null,
     ipLongitude: latestIPData ? Number(latestIPData.longitude) : null,
     country: latestIPData ? latestIPData.country : 'N/A',
@@ -213,9 +296,10 @@ async function persistDataToMongo() {
 
     const result = await res.json();
     if (res.ok && result.success) {
+      currentSessionId = result.id;
       mongoBadge.className = 'badge badge-mongo';
       mongoStatusText.textContent = `MongoDB: Saved ✓ (${activeSource.toUpperCase()})`;
-      console.log('MongoDB saved successfully, ID:', result.id);
+      console.log(`MongoDB ${result.isUpdate ? 'updated' : 'saved'} successfully, ID:`, result.id);
     } else {
       throw new Error(result.error || 'Server error saving session');
     }
@@ -234,7 +318,6 @@ async function fetchPublicIP() {
   hideError();
 
   try {
-    // Strategy 1: ipwho.is (Rich data, CORS-friendly, no token needed)
     const res = await fetch('https://ipwho.is/', { cache: 'no-cache' });
     if (!res.ok) throw new Error('ipwho.is failed');
     const data = await res.json();
@@ -267,7 +350,6 @@ async function fetchPublicIP() {
   }
 
   try {
-    // Strategy 2: freeipapi.com
     const res = await fetch('https://freeipapi.com/api/json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('freeipapi failed');
     const data = await res.json();
@@ -296,7 +378,6 @@ async function fetchPublicIP() {
   }
 
   try {
-    // Strategy 3: ipify (simple IP fallback)
     const res = await fetch('https://api64.ipify.org?format=json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('ipify failed');
     const data = await res.json();
@@ -347,7 +428,6 @@ function setLoadingState(isLoading) {
     ipTypeBadge.textContent = 'Detecting...';
     copyBtn.disabled = true;
 
-    // Reset fields to skeleton loaders
     const skeletons = [locationVal, cityVal, ispVal, asnVal, coordsVal, timezoneVal];
     skeletons.forEach(el => {
       el.innerHTML = '<span class="skeleton skeleton-text"></span>';
@@ -401,6 +481,18 @@ async function copyIPToClipboard() {
 }
 
 // Event Listeners
+if (allowLocationBtn) {
+  allowLocationBtn.addEventListener('click', () => {
+    requestDeviceLocation(true);
+  });
+}
+
+if (locateBtn) {
+  locateBtn.addEventListener('click', () => {
+    requestDeviceLocation(true);
+  });
+}
+
 if (refreshBtn) {
   refreshBtn.addEventListener('click', () => {
     fetchPublicIP();
@@ -415,17 +507,12 @@ if (retryBtn) {
   });
 }
 
-if (locateBtn) {
-  locateBtn.addEventListener('click', () => {
-    requestDeviceLocation(true);
-  });
-}
-
 copyBtn.addEventListener('click', copyIPToClipboard);
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   initSessionDetails();
+  checkLocationPermissions();
   fetchPublicIP();
   requestDeviceLocation();
 });

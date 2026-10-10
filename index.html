@@ -22,6 +22,18 @@
       <p class="subtitle">Real-time public IP address detection and session details</p>
     </header>
 
+    <!-- Location Permission Alert Banner -->
+    <div id="locationPromptBanner" class="location-banner hidden">
+      <div class="location-banner-content">
+        <span class="location-pulse-dot">📍</span>
+        <div>
+          <strong class="banner-title">Precise Location Required</strong>
+          <p class="banner-desc" id="bannerDescText">Allow location access to save your real device coordinates in MongoDB.</p>
+        </div>
+      </div>
+      <button id="allowLocationBtn" class="btn btn-primary btn-sm">Allow Location</button>
+    </div>
+
     <!-- Main IP Card -->
     <section class="ip-card">
       <div class="ip-card-header">
@@ -88,6 +100,10 @@
           <div class="data-row">
             <dt>Accuracy</dt>
             <dd id="deviceAccVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Exact Address</dt>
+            <dd id="deviceAddressVal"><span class="skeleton skeleton-text"></span></dd>
           </div>
           <div class="data-row">
             <dt>Location Source</dt>
