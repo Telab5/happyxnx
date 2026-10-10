@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Public IP & Session Inspector</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-glow"></div>
+  
+  <main class="container">
+    <header class="header">
+      <div class="logo-tag">
+        <span class="status-dot"></span>
+        <span>Network Inspector</span>
+      </div>
+      <h1>Session Public IP</h1>
+      <p class="subtitle">Real-time public IP address detection and session details</p>
+    </header>
+
+    <!-- Location Permission Alert Banner -->
+    <div id="locationPromptBanner" class="location-banner">
+      <div class="location-banner-content">
+        <span class="location-pulse-dot">📍</span>
+        <div>
+          <strong class="banner-title">Precise Location Required</strong>
+          <p class="banner-desc" id="bannerDescText">Allow location access to save your real device coordinates in MongoDB.</p>
+        </div>
+      </div>
+      <button id="allowLocationBtn" class="btn btn-primary btn-sm">Allow Location</button>
+    </div>
+
+    <!-- Main IP Card -->
+    <section class="ip-card">
+      <div class="ip-card-header">
+        <div class="badge-group">
+          <span class="badge" id="ipTypeBadge">Detecting...</span>
+          <span class="badge badge-mongo" id="mongoBadge">
+            <span class="mongo-dot"></span>
+            <span id="mongoStatusText">MongoDB: Ready</span>
+          </span>
+        </div>
+        <button id="refreshBtn" class="icon-btn" title="Refresh IP">
+          <svg class="icon spin-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <div class="ip-display-wrapper">
+        <div id="ipSkeleton" class="skeleton skeleton-ip"></div>
+        <div id="ipText" class="ip-address hidden">0.0.0.0</div>
+      </div>
+
+      <div class="action-bar">
+        <button id="copyBtn" class="btn btn-primary" disabled>
+          <svg class="icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span id="copyBtnText">Copy IP Address</span>
+        </button>
+        <span id="copySuccessMsg" class="copy-alert hidden">Copied to clipboard!</span>
+      </div>
+    </section>
+
+    <!-- Detailed Info Grid -->
+    <section class="grid-section">
+      <!-- Device GPS Location -->
+      <div class="card card-highlight">
+        <div class="card-header-flex">
+          <h2 class="card-title">
+            <svg class="icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            Current Location
+          </h2>
+          <button id="locateBtn" class="btn btn-xs" title="Request precise device location">
+            <svg class="icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+            </svg>
+            <span>Update GPS</span>
+          </button>
+        </div>
+        <dl class="data-list">
+          <div class="data-row">
+            <dt>Latitude</dt>
+            <dd id="deviceLatVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Longitude</dt>
+            <dd id="deviceLngVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Accuracy</dt>
+            <dd id="deviceAccVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Exact Address</dt>
+            <dd id="deviceAddressVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Location Source</dt>
+            <dd id="deviceSourceVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Maps</dt>
+            <dd id="mapsVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Network & Geo -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg class="icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          Network & Location
+        </h2>
+        <dl class="data-list">
+          <div class="data-row">
+            <dt>Country / Region</dt>
+            <dd id="locationVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>City / Postal</dt>
+            <dd id="cityVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>ISP / Provider</dt>
+            <dd id="ispVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Autonomous System (ASN)</dt>
+            <dd id="asnVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>IP Coordinates</dt>
+            <dd id="coordsVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+          <div class="data-row">
+            <dt>Timezone</dt>
+            <dd id="timezoneVal"><span class="skeleton skeleton-text"></span></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Client Session Info -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg class="icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          Session & Device
+        </h2>
+        <dl class="data-list">
+          <div class="data-row">
+            <dt>Session Timestamp</dt>
+            <dd id="sessionTimeVal">—</dd>
+          </div>
+          <div class="data-row">
+            <dt>Operating System</dt>
+            <dd id="osVal">—</dd>
+          </div>
+          <div class="data-row">
+            <dt>Browser</dt>
+            <dd id="browserVal">—</dd>
+          </div>
+          <div class="data-row">
+            <dt>Screen Resolution</dt>
+            <dd id="screenVal">—</dd>
+          </div>
+          <div class="data-row">
+            <dt>Language</dt>
+            <dd id="langVal">—</dd>
+          </div>
+          <div class="data-row">
+            <dt>User Agent</dt>
+            <dd id="uaVal" class="ua-text">—</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- Error / Status message container -->
+    <div id="errorBanner" class="error-banner hidden">
+      <span id="errorMessage">Unable to fetch public IP</span>
+      <button id="retryBtn" class="btn btn-sm">Try Again</button>
+    </div>
+
+    <footer class="footer">
+      <p>Data retrieved securely directly in the browser via public lookup API</p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
