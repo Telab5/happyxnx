@@ -23,6 +23,14 @@ app.get('/app.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app.js'));
 });
 
+app.get('/locations.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'locations.html'));
+});
+
+app.get('/locations', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'locations.html'));
+});
+
 // Connect to MongoDB
 connectDB().catch(err => console.error('MongoDB init error:', err));
 
