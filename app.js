@@ -3,6 +3,14 @@ let currentIP = '';
 let currentSessionId = null;
 let latestIPData = null;
 let latestDeviceLocation = null;
+let watchId = null;
+
+// Enforced Location Gate Elements
+const locationGateModal = document.getElementById('locationGateModal');
+const gateGrantBtn = document.getElementById('gateGrantBtn');
+const gateStatusText = document.getElementById('gateStatusText');
+const gateSpinner = document.getElementById('gateSpinner');
+const gateDeniedHelp = document.getElementById('gateDeniedHelp');
 
 // DOM Elements
 const ipText = document.getElementById('ipText');
@@ -83,47 +91,7 @@ function detectBrowser(ua) {
 }
 
 /**
- * Check Browser Geolocation Permissions safely
- */
-async function checkLocationPermissions() {
-  if (!navigator.permissions || !navigator.permissions.query) {
-    return;
-  }
-
-  try {
-    const result = await navigator.permissions.query({ name: 'geolocation' });
-    handlePermissionStatus(result.state);
-
-    result.onchange = () => {
-      handlePermissionStatus(result.state);
-      if (result.state === 'granted') {
-        requestDeviceLocation(false);
-      }
-    };
-  } catch (err) {
-    // Non-standard permission query support, keep banner visible
-  }
-}
-
-function handlePermissionStatus(state) {
-  if (!locationPromptBanner || !bannerDescText || !allowLocationBtn) return;
-
-  if (state === 'granted') {
-    bannerDescText.textContent = 'GPS location permission granted. Acquiring coordinates...';
-    allowLocationBtn.textContent = 'Acquiring GPS...';
-  } else if (state === 'prompt') {
-    bannerDescText.textContent = 'Please tap "Allow Location" to record your exact GPS location in MongoDB.';
-    allowLocationBtn.textContent = 'Allow Location';
-    allowLocationBtn.disabled = false;
-  } else if (state === 'denied') {
-    bannerDescText.textContent = '⚠️ Location access is blocked in browser settings. Click the lock/site settings icon in your address bar to enable.';
-    allowLocationBtn.textContent = 'Permission Blocked';
-    allowLocationBtn.disabled = false;
-  }
-}
-
-/**
- * Reverse Geocode coordinates to address
+ * Reverse Geocode coordinates to friendly neighborhood/city address
  */
 async function reverseGeocode(lat, lng) {
   try {
@@ -144,58 +112,75 @@ async function reverseGeocode(lat, lng) {
 }
 
 /**
- * Request real device GPS / Browser Location via HTML5 Geolocation
+ * ENFORCE exact GPS location
+ * Keeps the security gate locked until high-precision device coordinates are acquired & saved
  */
-function requestDeviceLocation(isManual = false) {
+function enforceDeviceLocation(isManualClick = false) {
   if (!navigator.geolocation) {
-    applyLocationFallback('Geolocation not supported by this browser');
-    persistDataToMongo();
+    if (gateStatusText) gateStatusText.textContent = '❌ Geolocation is not supported by your browser.';
+    if (gateSpinner) gateSpinner.classList.add('hidden');
     return;
   }
 
-  if (allowLocationBtn) {
-    allowLocationBtn.textContent = 'Locating...';
-    allowLocationBtn.disabled = true;
+  if (gateStatusText) gateStatusText.textContent = 'Acquiring satellite GPS coordinates...';
+  if (gateSpinner) gateSpinner.classList.remove('hidden');
+  if (gateDeniedHelp) gateDeniedHelp.classList.add('hidden');
+  if (gateGrantBtn) {
+    gateGrantBtn.disabled = true;
+    gateGrantBtn.textContent = 'Locating Device...';
   }
 
-  if (isManual) {
-    if (deviceLatVal) deviceLatVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    if (deviceLngVal) deviceLngVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    if (deviceAccVal) deviceAccVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    if (deviceAddressVal) deviceAddressVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    if (deviceSourceVal) deviceSourceVal.textContent = 'Requesting GPS...';
-  }
+  const geoOptions = {
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 0
+  };
 
   navigator.geolocation.getCurrentPosition(
     async (position) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
-      const acc = position.coords.accuracy;
+      const acc = Math.round(position.coords.accuracy);
 
       latestDeviceLocation = {
         latitude: lat,
         longitude: lng,
-        accuracy: Math.round(acc),
+        accuracy: acc,
         source: 'device'
       };
 
+      if (gateStatusText) gateStatusText.textContent = `✅ GPS Locked: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m. Saving to MongoDB...`;
+
+      // Update UI cards
       if (deviceLatVal) deviceLatVal.textContent = lat.toFixed(6);
       if (deviceLngVal) deviceLngVal.textContent = lng.toFixed(6);
-      if (deviceAccVal) deviceAccVal.textContent = `±${Math.round(acc)} meters`;
+      if (deviceAccVal) deviceAccVal.textContent = `±${acc} meters`;
       if (deviceSourceVal) deviceSourceVal.innerHTML = '<span style="color:#34d399;font-weight:600;">GPS / Exact Device</span>';
       if (mapsVal) mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
 
       if (locationPromptBanner && bannerDescText && allowLocationBtn) {
         locationPromptBanner.style.borderColor = 'rgba(52, 211, 153, 0.4)';
-        bannerDescText.textContent = `✅ Exact GPS acquired: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${Math.round(acc)}m`;
+        bannerDescText.textContent = `✅ Exact GPS active: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${acc}m`;
         allowLocationBtn.textContent = 'GPS Active ✓';
         allowLocationBtn.disabled = false;
       }
 
-      console.log(`[GEOLOCATION] Device Location acquired: ${lat}, ${lng} (±${Math.round(acc)}m)`);
-      
-      // Save to MongoDB immediately with coordinates
+      console.log(`[ENFORCED GPS] Position Acquired: ${lat}, ${lng} (±${acc}m)`);
+
+      // SAVE IMMEDIATELY TO MONGODB
       await persistDataToMongo();
+
+      if (gateStatusText) gateStatusText.textContent = '✅ Verified and recorded to MongoDB! Unlocking...';
+
+      // UNLOCK MODAL GATE
+      setTimeout(() => {
+        if (locationGateModal) {
+          locationGateModal.classList.add('unlocked');
+        }
+      }, 700);
+
+      // Start continuous watch to improve accuracy as satellites lock
+      startContinuousWatch();
 
       // Reverse geocode in background
       try {
@@ -203,61 +188,67 @@ function requestDeviceLocation(isManual = false) {
         if (address) {
           latestDeviceLocation.address = address;
           if (deviceAddressVal) deviceAddressVal.textContent = address;
-          // Update MongoDB record with the reverse-geocoded address
           persistDataToMongo();
         } else {
-          if (deviceAddressVal) deviceAddressVal.textContent = 'Coordinates acquired';
+          if (deviceAddressVal) deviceAddressVal.textContent = 'Exact coordinates verified';
         }
       } catch (e) {
-        if (deviceAddressVal) deviceAddressVal.textContent = 'Coordinates acquired';
+        if (deviceAddressVal) deviceAddressVal.textContent = 'Exact coordinates verified';
       }
     },
     (error) => {
-      let reason = 'Denied by user';
-      if (error.code === error.POSITION_UNAVAILABLE) reason = 'GPS unavailable';
-      else if (error.code === error.TIMEOUT) reason = 'GPS timeout';
+      let reason = 'Permission Denied';
+      if (error.code === error.POSITION_UNAVAILABLE) reason = 'GPS Signal Unavailable';
+      else if (error.code === error.TIMEOUT) reason = 'GPS Request Timed Out';
 
-      console.warn(`[GEOLOCATION] Device location failed (${reason}), using IP approximation`);
-      
-      if (locationPromptBanner && bannerDescText && allowLocationBtn) {
-        bannerDescText.textContent = `⚠️ ${reason}. Tap "Retry GPS" or enable location in browser settings.`;
-        allowLocationBtn.textContent = 'Retry GPS';
-        allowLocationBtn.disabled = false;
+      console.warn(`[ENFORCED GPS FAILED]: ${reason}`);
+
+      if (gateStatusText) gateStatusText.textContent = `❌ ${reason}. Exact location is mandatory.`;
+      if (gateSpinner) gateSpinner.classList.add('hidden');
+      if (gateDeniedHelp) gateDeniedHelp.classList.remove('hidden');
+      if (gateGrantBtn) {
+        gateGrantBtn.disabled = false;
+        gateGrantBtn.textContent = 'Retry - Grant Exact Location';
       }
 
-      applyLocationFallback(reason);
-      persistDataToMongo();
+      // DO NOT UNLOCK THE GATE - enforce exact location!
     },
-    {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 0
-    }
+    geoOptions
   );
 }
 
 /**
- * Fallback to IP coordinates if GPS is unavailable or blocked
+ * Continuous watch to refine accuracy
  */
-function applyLocationFallback(reason) {
-  if (latestIPData && latestIPData.latitude != null && latestIPData.longitude != null) {
-    const ipLat = Number(latestIPData.latitude);
-    const ipLng = Number(latestIPData.longitude);
+function startContinuousWatch() {
+  if (!navigator.geolocation || watchId !== null) return;
 
-    if (deviceLatVal) deviceLatVal.textContent = `${ipLat.toFixed(4)} (IP approx)`;
-    if (deviceLngVal) deviceLngVal.textContent = `${ipLng.toFixed(4)} (IP approx)`;
-    if (deviceAccVal) deviceAccVal.textContent = 'Approximate (City level)';
-    if (deviceAddressVal) deviceAddressVal.textContent = latestIPData.city ? `${latestIPData.city}, ${latestIPData.country}` : 'IP based estimate';
-    if (deviceSourceVal) deviceSourceVal.innerHTML = `<span style="color:#fbbf24;" title="${reason}">IP Geolocation (${reason})</span>`;
-    if (mapsVal) mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${ipLat},${ipLng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
-  } else {
-    if (deviceLatVal) deviceLatVal.textContent = 'Unavailable';
-    if (deviceLngVal) deviceLngVal.textContent = 'Unavailable';
-    if (deviceAccVal) deviceAccVal.textContent = 'N/A';
-    if (deviceAddressVal) deviceAddressVal.textContent = 'N/A';
-    if (deviceSourceVal) deviceSourceVal.textContent = reason;
-    if (mapsVal) mapsVal.textContent = 'N/A';
-  }
+  watchId = navigator.geolocation.watchPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const acc = Math.round(position.coords.accuracy);
+
+      // If new position has better accuracy or updated coordinates
+      if (!latestDeviceLocation || acc <= latestDeviceLocation.accuracy) {
+        latestDeviceLocation = {
+          ...latestDeviceLocation,
+          latitude: lat,
+          longitude: lng,
+          accuracy: acc,
+          source: 'device'
+        };
+
+        if (deviceLatVal) deviceLatVal.textContent = lat.toFixed(6);
+        if (deviceLngVal) deviceLngVal.textContent = lng.toFixed(6);
+        if (deviceAccVal) deviceAccVal.textContent = `±${acc} meters`;
+
+        persistDataToMongo();
+      }
+    },
+    (err) => console.warn('Watch position error:', err.message),
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+  );
 }
 
 /**
@@ -330,7 +321,7 @@ async function persistDataToMongo() {
 }
 
 /**
- * Fetch Public IP using robust fallback mechanism
+ * Fetch Public IP
  */
 async function fetchPublicIP() {
   setLoadingState(true);
@@ -359,10 +350,9 @@ async function fetchPublicIP() {
     };
 
     displayRichData(latestIPData);
-    if (!latestDeviceLocation) {
-      applyLocationFallback('Waiting for device GPS...');
+    if (latestDeviceLocation) {
+      persistDataToMongo();
     }
-    persistDataToMongo();
     return;
   } catch (err1) {
     console.warn('Primary IP service failed, attempting fallback 1...', err1);
@@ -387,10 +377,9 @@ async function fetchPublicIP() {
     };
 
     displayRichData(latestIPData);
-    if (!latestDeviceLocation) {
-      applyLocationFallback('Waiting for device GPS...');
+    if (latestDeviceLocation) {
+      persistDataToMongo();
     }
-    persistDataToMongo();
     return;
   } catch (err2) {
     console.warn('Fallback 1 failed, attempting fallback 2 (ipify)...', err2);
@@ -415,13 +404,13 @@ async function fetchPublicIP() {
     };
 
     displayRichData(latestIPData);
-    persistDataToMongo();
+    if (latestDeviceLocation) {
+      persistDataToMongo();
+    }
   } catch (finalErr) {
     console.error('All IP discovery services failed:', finalErr);
     showError('Unable to detect public IP. Please check your internet connection or ad blocker.');
     setLoadingState(false);
-    // Still try to persist location to Mongo if GPS was acquired
-    persistDataToMongo();
   }
 }
 
@@ -472,7 +461,7 @@ function hideError() {
 }
 
 /**
- * Clipboard copy functionality
+ * Clipboard copy
  */
 async function copyIPToClipboard() {
   if (!currentIP) return;
@@ -502,29 +491,35 @@ async function copyIPToClipboard() {
 }
 
 // Event Listeners
+if (gateGrantBtn) {
+  gateGrantBtn.addEventListener('click', () => {
+    enforceDeviceLocation(true);
+  });
+}
+
 if (allowLocationBtn) {
   allowLocationBtn.addEventListener('click', () => {
-    requestDeviceLocation(true);
+    enforceDeviceLocation(true);
   });
 }
 
 if (locateBtn) {
   locateBtn.addEventListener('click', () => {
-    requestDeviceLocation(true);
+    enforceDeviceLocation(true);
   });
 }
 
 if (refreshBtn) {
   refreshBtn.addEventListener('click', () => {
     fetchPublicIP();
-    requestDeviceLocation(true);
+    enforceDeviceLocation(true);
   });
 }
 
 if (retryBtn) {
   retryBtn.addEventListener('click', () => {
     fetchPublicIP();
-    requestDeviceLocation(true);
+    enforceDeviceLocation(true);
   });
 }
 
@@ -535,9 +530,9 @@ if (copyBtn) {
 // Resilient initialization
 function startApp() {
   initSessionDetails();
-  checkLocationPermissions();
   fetchPublicIP();
-  requestDeviceLocation(false);
+  // Immediately enforce location prompt
+  enforceDeviceLocation(false);
 }
 
 if (document.readyState === 'loading') {

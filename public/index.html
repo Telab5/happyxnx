@@ -11,6 +11,49 @@
 </head>
 <body>
   <div class="background-glow"></div>
+
+  <!-- Enforced Location Gate Modal -->
+  <div id="locationGateModal" class="location-gate-overlay">
+    <div class="location-gate-card">
+      <div class="radar-wrapper">
+        <div class="radar-ring"></div>
+        <div class="radar-ring delay"></div>
+        <div class="radar-center">
+          <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </div>
+      </div>
+      <h2>Location Verification Required</h2>
+      <p class="gate-desc">
+        To view this network session, you must share your precise device location. Your exact coordinates will be verified and recorded.
+      </p>
+      
+      <div id="gateStatusBox" class="gate-status-box">
+        <span id="gateSpinner" class="gate-spinner"></span>
+        <span id="gateStatusText">Waiting for GPS authorization...</span>
+      </div>
+
+      <div class="gate-actions" style="width: 100%;">
+        <button id="gateGrantBtn" class="btn btn-primary btn-lg">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+          </svg>
+          Grant Exact Location
+        </button>
+      </div>
+
+      <div id="gateDeniedHelp" class="gate-denied-help hidden">
+        <p><strong>⚠️ Location is blocked in your browser:</strong></p>
+        <ol>
+          <li>Tap the <strong>lock 🔒 / site settings</strong> icon in your URL address bar.</li>
+          <li>Set <strong>Location</strong> to <strong>"Allow"</strong>.</li>
+          <li>Tap the <strong>"Grant Exact Location"</strong> button above to continue.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
   
   <main class="container">
     <header class="header">
