@@ -3,7 +3,6 @@ let currentIP = '';
 let currentSessionId = null;
 let latestIPData = null;
 let latestDeviceLocation = null;
-let locationWatchId = null;
 
 // DOM Elements
 const ipText = document.getElementById('ipText');
@@ -55,14 +54,14 @@ const uaVal = document.getElementById('uaVal');
  */
 function initSessionDetails() {
   const now = new Date();
-  sessionTimeVal.textContent = now.toLocaleTimeString() + ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
-  screenVal.textContent = `${window.screen.width} × ${window.screen.height} (${window.devicePixelRatio}x)`;
-  langVal.textContent = navigator.language || 'Unknown';
+  if (sessionTimeVal) sessionTimeVal.textContent = now.toLocaleTimeString() + ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+  if (screenVal) screenVal.textContent = `${window.screen.width} × ${window.screen.height} (${window.devicePixelRatio}x)`;
+  if (langVal) langVal.textContent = navigator.language || 'Unknown';
 
   const ua = navigator.userAgent;
-  uaVal.textContent = ua;
-  osVal.textContent = detectOS(ua);
-  browserVal.textContent = detectBrowser(ua);
+  if (uaVal) uaVal.textContent = ua;
+  if (osVal) osVal.textContent = detectOS(ua);
+  if (browserVal) browserVal.textContent = detectBrowser(ua);
 }
 
 function detectOS(ua) {
@@ -84,11 +83,10 @@ function detectBrowser(ua) {
 }
 
 /**
- * Check Browser Geolocation Permissions
+ * Check Browser Geolocation Permissions safely
  */
 async function checkLocationPermissions() {
   if (!navigator.permissions || !navigator.permissions.query) {
-    if (locationPromptBanner) locationPromptBanner.classList.remove('hidden');
     return;
   }
 
@@ -103,30 +101,29 @@ async function checkLocationPermissions() {
       }
     };
   } catch (err) {
-    if (locationPromptBanner) locationPromptBanner.classList.remove('hidden');
+    // Non-standard permission query support, keep banner visible
   }
 }
 
 function handlePermissionStatus(state) {
-  if (!locationPromptBanner) return;
+  if (!locationPromptBanner || !bannerDescText || !allowLocationBtn) return;
 
   if (state === 'granted') {
-    locationPromptBanner.classList.add('hidden');
+    bannerDescText.textContent = 'GPS location permission granted. Acquiring coordinates...';
+    allowLocationBtn.textContent = 'Acquiring GPS...';
   } else if (state === 'prompt') {
-    locationPromptBanner.classList.remove('hidden');
-    bannerDescText.textContent = 'Please tap "Allow Location" so your exact coordinates can be saved in MongoDB.';
+    bannerDescText.textContent = 'Please tap "Allow Location" to record your exact GPS location in MongoDB.';
     allowLocationBtn.textContent = 'Allow Location';
     allowLocationBtn.disabled = false;
   } else if (state === 'denied') {
-    locationPromptBanner.classList.remove('hidden');
-    bannerDescText.textContent = 'Location is blocked in browser settings. Click the lock/tune icon in the URL bar to enable.';
+    bannerDescText.textContent = '⚠️ Location access is blocked in browser settings. Click the lock/site settings icon in your address bar to enable.';
     allowLocationBtn.textContent = 'Permission Blocked';
-    allowLocationBtn.disabled = true;
+    allowLocationBtn.disabled = false;
   }
 }
 
 /**
- * Reverse Geocode coordinates to friendly neighborhood/city address
+ * Reverse Geocode coordinates to address
  */
 async function reverseGeocode(lat, lng) {
   try {
@@ -156,12 +153,17 @@ function requestDeviceLocation(isManual = false) {
     return;
   }
 
+  if (allowLocationBtn) {
+    allowLocationBtn.textContent = 'Locating...';
+    allowLocationBtn.disabled = true;
+  }
+
   if (isManual) {
-    deviceLatVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    deviceLngVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    deviceAccVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    deviceAddressVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
-    deviceSourceVal.textContent = 'Requesting GPS...';
+    if (deviceLatVal) deviceLatVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
+    if (deviceLngVal) deviceLngVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
+    if (deviceAccVal) deviceAccVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
+    if (deviceAddressVal) deviceAddressVal.innerHTML = '<span class="skeleton skeleton-text"></span>';
+    if (deviceSourceVal) deviceSourceVal.textContent = 'Requesting GPS...';
   }
 
   navigator.geolocation.getCurrentPosition(
@@ -177,27 +179,38 @@ function requestDeviceLocation(isManual = false) {
         source: 'device'
       };
 
-      deviceLatVal.textContent = lat.toFixed(6);
-      deviceLngVal.textContent = lng.toFixed(6);
-      deviceAccVal.textContent = `±${Math.round(acc)} meters`;
-      deviceSourceVal.innerHTML = '<span style="color:#34d399;font-weight:600;">GPS / Exact Device</span>';
-      mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
+      if (deviceLatVal) deviceLatVal.textContent = lat.toFixed(6);
+      if (deviceLngVal) deviceLngVal.textContent = lng.toFixed(6);
+      if (deviceAccVal) deviceAccVal.textContent = `±${Math.round(acc)} meters`;
+      if (deviceSourceVal) deviceSourceVal.innerHTML = '<span style="color:#34d399;font-weight:600;">GPS / Exact Device</span>';
+      if (mapsVal) mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
 
-      if (locationPromptBanner) {
-        locationPromptBanner.classList.add('hidden');
-      }
-
-      // Reverse geocode to address
-      const address = await reverseGeocode(lat, lng);
-      if (address) {
-        latestDeviceLocation.address = address;
-        deviceAddressVal.textContent = address;
-      } else {
-        deviceAddressVal.textContent = 'Exact coordinates acquired';
+      if (locationPromptBanner && bannerDescText && allowLocationBtn) {
+        locationPromptBanner.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+        bannerDescText.textContent = `✅ Exact GPS acquired: (${lat.toFixed(4)}, ${lng.toFixed(4)}) ±${Math.round(acc)}m`;
+        allowLocationBtn.textContent = 'GPS Active ✓';
+        allowLocationBtn.disabled = false;
       }
 
       console.log(`[GEOLOCATION] Device Location acquired: ${lat}, ${lng} (±${Math.round(acc)}m)`);
-      persistDataToMongo();
+      
+      // Save to MongoDB immediately with coordinates
+      await persistDataToMongo();
+
+      // Reverse geocode in background
+      try {
+        const address = await reverseGeocode(lat, lng);
+        if (address) {
+          latestDeviceLocation.address = address;
+          if (deviceAddressVal) deviceAddressVal.textContent = address;
+          // Update MongoDB record with the reverse-geocoded address
+          persistDataToMongo();
+        } else {
+          if (deviceAddressVal) deviceAddressVal.textContent = 'Coordinates acquired';
+        }
+      } catch (e) {
+        if (deviceAddressVal) deviceAddressVal.textContent = 'Coordinates acquired';
+      }
     },
     (error) => {
       let reason = 'Denied by user';
@@ -205,12 +218,19 @@ function requestDeviceLocation(isManual = false) {
       else if (error.code === error.TIMEOUT) reason = 'GPS timeout';
 
       console.warn(`[GEOLOCATION] Device location failed (${reason}), using IP approximation`);
+      
+      if (locationPromptBanner && bannerDescText && allowLocationBtn) {
+        bannerDescText.textContent = `⚠️ ${reason}. Tap "Retry GPS" or enable location in browser settings.`;
+        allowLocationBtn.textContent = 'Retry GPS';
+        allowLocationBtn.disabled = false;
+      }
+
       applyLocationFallback(reason);
       persistDataToMongo();
     },
     {
       enableHighAccuracy: true,
-      timeout: 12000,
+      timeout: 15000,
       maximumAge: 0
     }
   );
@@ -224,19 +244,19 @@ function applyLocationFallback(reason) {
     const ipLat = Number(latestIPData.latitude);
     const ipLng = Number(latestIPData.longitude);
 
-    deviceLatVal.textContent = `${ipLat.toFixed(4)} (IP approx)`;
-    deviceLngVal.textContent = `${ipLng.toFixed(4)} (IP approx)`;
-    deviceAccVal.textContent = 'Approximate (City level)';
-    deviceAddressVal.textContent = latestIPData.city ? `${latestIPData.city}, ${latestIPData.country}` : 'IP based estimate';
-    deviceSourceVal.innerHTML = `<span style="color:#fbbf24;" title="${reason}">IP Geolocation (${reason})</span>`;
-    mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${ipLat},${ipLng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
+    if (deviceLatVal) deviceLatVal.textContent = `${ipLat.toFixed(4)} (IP approx)`;
+    if (deviceLngVal) deviceLngVal.textContent = `${ipLng.toFixed(4)} (IP approx)`;
+    if (deviceAccVal) deviceAccVal.textContent = 'Approximate (City level)';
+    if (deviceAddressVal) deviceAddressVal.textContent = latestIPData.city ? `${latestIPData.city}, ${latestIPData.country}` : 'IP based estimate';
+    if (deviceSourceVal) deviceSourceVal.innerHTML = `<span style="color:#fbbf24;" title="${reason}">IP Geolocation (${reason})</span>`;
+    if (mapsVal) mapsVal.innerHTML = `<a href="https://www.google.com/maps?q=${ipLat},${ipLng}" target="_blank" rel="noopener noreferrer" class="maps-link">Open in Maps &nearr;</a>`;
   } else {
-    deviceLatVal.textContent = 'Unavailable';
-    deviceLngVal.textContent = 'Unavailable';
-    deviceAccVal.textContent = 'N/A';
-    deviceAddressVal.textContent = 'N/A';
-    deviceSourceVal.textContent = reason;
-    mapsVal.textContent = 'N/A';
+    if (deviceLatVal) deviceLatVal.textContent = 'Unavailable';
+    if (deviceLngVal) deviceLngVal.textContent = 'Unavailable';
+    if (deviceAccVal) deviceAccVal.textContent = 'N/A';
+    if (deviceAddressVal) deviceAddressVal.textContent = 'N/A';
+    if (deviceSourceVal) deviceSourceVal.textContent = reason;
+    if (mapsVal) mapsVal.textContent = 'N/A';
   }
 }
 
@@ -244,7 +264,6 @@ function applyLocationFallback(reason) {
  * Persist combined Session, IP, and Location data to MongoDB
  */
 async function persistDataToMongo() {
-  if (!latestIPData && !currentIP) return;
   if (!mongoBadge || !mongoStatusText) return;
 
   mongoBadge.className = 'badge badge-mongo saving';
@@ -264,7 +283,7 @@ async function persistDataToMongo() {
 
   const payload = {
     sessionId: currentSessionId,
-    ip: currentIP,
+    ip: currentIP || (latestIPData ? latestIPData.ip : ''),
     ipType: latestIPData ? latestIPData.type : (currentIP.includes(':') ? 'IPv6' : 'IPv4'),
     latitude: activeLat != null ? Number(activeLat) : null,
     longitude: activeLng != null ? Number(activeLng) : null,
@@ -274,14 +293,14 @@ async function persistDataToMongo() {
     address: activeAddress,
     ipLatitude: latestIPData ? Number(latestIPData.latitude) : null,
     ipLongitude: latestIPData ? Number(latestIPData.longitude) : null,
-    country: latestIPData ? latestIPData.country : 'N/A',
-    city: latestIPData ? latestIPData.city : 'N/A',
-    isp: latestIPData ? latestIPData.isp : 'N/A',
-    asn: latestIPData ? latestIPData.asn : 'N/A',
-    timezone: latestIPData ? latestIPData.timezone : 'N/A',
-    os: osVal.textContent || detectOS(navigator.userAgent),
-    browser: browserVal.textContent || detectBrowser(navigator.userAgent),
-    screenResolution: screenVal.textContent || `${window.screen.width} × ${window.screen.height}`,
+    country: latestIPData ? latestIPData.country : 'Detecting...',
+    city: latestIPData ? latestIPData.city : 'Detecting...',
+    isp: latestIPData ? latestIPData.isp : 'Detecting...',
+    asn: latestIPData ? latestIPData.asn : 'Detecting...',
+    timezone: latestIPData ? latestIPData.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone,
+    os: (osVal && osVal.textContent) || detectOS(navigator.userAgent),
+    browser: (browserVal && browserVal.textContent) || detectBrowser(navigator.userAgent),
+    screenResolution: (screenVal && screenVal.textContent) || `${window.screen.width} × ${window.screen.height}`,
     language: navigator.language || 'Unknown',
     userAgent: navigator.userAgent,
     sessionTime: new Date().toISOString()
@@ -401,53 +420,55 @@ async function fetchPublicIP() {
     console.error('All IP discovery services failed:', finalErr);
     showError('Unable to detect public IP. Please check your internet connection or ad blocker.');
     setLoadingState(false);
+    // Still try to persist location to Mongo if GPS was acquired
+    persistDataToMongo();
   }
 }
 
 function displayRichData(info) {
   currentIP = info.ip;
-  ipText.textContent = info.ip;
-  ipTypeBadge.textContent = info.type || (info.ip.includes(':') ? 'IPv6' : 'IPv4');
+  if (ipText) ipText.textContent = info.ip;
+  if (ipTypeBadge) ipTypeBadge.textContent = info.type || (info.ip.includes(':') ? 'IPv6' : 'IPv4');
 
-  locationVal.textContent = info.country;
-  cityVal.textContent = info.city;
-  ispVal.textContent = info.isp;
-  asnVal.textContent = info.asn;
-  coordsVal.textContent = info.coords;
-  timezoneVal.textContent = info.timezone;
+  if (locationVal) locationVal.textContent = info.country;
+  if (cityVal) cityVal.textContent = info.city;
+  if (ispVal) ispVal.textContent = info.isp;
+  if (asnVal) asnVal.textContent = info.asn;
+  if (coordsVal) coordsVal.textContent = info.coords;
+  if (timezoneVal) timezoneVal.textContent = info.timezone;
 
   setLoadingState(false);
-  copyBtn.disabled = false;
+  if (copyBtn) copyBtn.disabled = false;
 }
 
 function setLoadingState(isLoading) {
   if (isLoading) {
-    ipSkeleton.classList.remove('hidden');
-    ipText.classList.add('hidden');
+    if (ipSkeleton) ipSkeleton.classList.remove('hidden');
+    if (ipText) ipText.classList.add('hidden');
     if (refreshIcon) refreshIcon.classList.add('spinning');
-    ipTypeBadge.textContent = 'Detecting...';
-    copyBtn.disabled = true;
+    if (ipTypeBadge) ipTypeBadge.textContent = 'Detecting...';
+    if (copyBtn) copyBtn.disabled = true;
 
     const skeletons = [locationVal, cityVal, ispVal, asnVal, coordsVal, timezoneVal];
     skeletons.forEach(el => {
-      el.innerHTML = '<span class="skeleton skeleton-text"></span>';
+      if (el) el.innerHTML = '<span class="skeleton skeleton-text"></span>';
     });
   } else {
-    ipSkeleton.classList.add('hidden');
-    ipText.classList.remove('hidden');
+    if (ipSkeleton) ipSkeleton.classList.add('hidden');
+    if (ipText) ipText.classList.remove('hidden');
     if (refreshIcon) refreshIcon.classList.remove('spinning');
   }
 }
 
 function showError(msg) {
-  errorMessage.textContent = msg;
-  errorBanner.classList.remove('hidden');
-  ipTypeBadge.textContent = 'Failed';
-  ipText.textContent = 'Unavailable';
+  if (errorMessage) errorMessage.textContent = msg;
+  if (errorBanner) errorBanner.classList.remove('hidden');
+  if (ipTypeBadge) ipTypeBadge.textContent = 'Failed';
+  if (ipText) ipText.textContent = 'Unavailable';
 }
 
 function hideError() {
-  errorBanner.classList.add('hidden');
+  if (errorBanner) errorBanner.classList.add('hidden');
 }
 
 /**
@@ -468,12 +489,12 @@ async function copyIPToClipboard() {
       document.body.removeChild(tempInput);
     }
 
-    copySuccessMsg.classList.remove('hidden');
-    copyBtnText.textContent = 'Copied!';
+    if (copySuccessMsg) copySuccessMsg.classList.remove('hidden');
+    if (copyBtnText) copyBtnText.textContent = 'Copied!';
     
     setTimeout(() => {
-      copySuccessMsg.classList.add('hidden');
-      copyBtnText.textContent = 'Copy IP Address';
+      if (copySuccessMsg) copySuccessMsg.classList.add('hidden');
+      if (copyBtnText) copyBtnText.textContent = 'Copy IP Address';
     }, 2500);
   } catch (err) {
     console.error('Failed to copy IP: ', err);
@@ -507,12 +528,20 @@ if (retryBtn) {
   });
 }
 
-copyBtn.addEventListener('click', copyIPToClipboard);
+if (copyBtn) {
+  copyBtn.addEventListener('click', copyIPToClipboard);
+}
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
+// Resilient initialization
+function startApp() {
   initSessionDetails();
   checkLocationPermissions();
   fetchPublicIP();
-  requestDeviceLocation();
-});
+  requestDeviceLocation(false);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}

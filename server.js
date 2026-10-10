@@ -43,19 +43,18 @@ app.post('/api/save-session', async (req, res) => {
       language,
       userAgent,
       sessionTime
-    } = req.body;
+    } = req.body || {};
 
-    if (!ip) {
-      return res.status(400).json({ success: false, error: 'IP address is required.' });
-    }
+    const headerIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.headers['x-real-ip'] || req.socket?.remoteAddress;
+    const finalIp = ip || headerIp || 'Unknown';
 
     const lat = latitude != null && !isNaN(Number(latitude)) ? Number(latitude) : null;
     const lng = longitude != null && !isNaN(Number(longitude)) ? Number(longitude) : null;
     const computedMapsUrl = mapsUrl || (lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 
     const dataToSave = {
-      ip,
-      ipType,
+      ip: finalIp,
+      ipType: ipType || (finalIp.includes(':') ? 'IPv6' : 'IPv4'),
       latitude: lat,
       longitude: lng,
       accuracy: accuracy != null && !isNaN(Number(accuracy)) ? Number(accuracy) : null,
